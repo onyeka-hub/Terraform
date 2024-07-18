@@ -165,10 +165,21 @@
 name: Terraform Plan and Apply
 
 on:
-  push:
-    branches:
-      - test
-  pull_request:
+  # push:
+  #   branches:
+  #     - test
+  # pull_request:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Select the Environment for Deployment'
+        required: true
+        default: 'sandbox'
+        type: choice
+        options:
+          - sandbox
+          - staging
+          - prod
 
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
