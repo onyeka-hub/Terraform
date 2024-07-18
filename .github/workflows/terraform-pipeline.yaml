@@ -190,7 +190,7 @@ jobs:
   terraform:
     name: Terraform CICD
     runs-on: ubuntu-latest
-    environment: dev
+    environment: sandbox
 
     steps:
     - name: Checkout code
