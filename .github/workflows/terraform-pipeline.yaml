@@ -214,7 +214,7 @@ jobs:
       run: terraform plan -var-file=Environments/prod/terraform.tfvars -out=plan-prod.tfplan
 
     - name: Manual Approval
-      if: github.ref == 'refs/heads/main'
+      # if: github.ref == 'refs/heads/main'
       id: approval
       uses: trstringer/manual-approval@v1
       with:
