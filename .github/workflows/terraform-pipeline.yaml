@@ -218,7 +218,7 @@ jobs:
       id: approval
       uses: trstringer/manual-approval@v1
       with:
-        approvers: onyeka-hub  # Ensure this is the correct GitHub username
+        approvers: onyeka-hub
         secret: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         minimum-approvals: 1
         issue-title: "Manual approval required for workflow run"
