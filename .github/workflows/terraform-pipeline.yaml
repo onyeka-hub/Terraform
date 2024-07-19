@@ -233,7 +233,7 @@ jobs:
       run: echo ${{ steps.approval.outputs.approved }}
 
     - name: Terraform Apply
-      if: steps.approval.outputs.approved == 'true'
+      if: steps.approval.outputs.approved == 'Approved'
       run: terraform apply --auto-approve plan-prod.tfplan
 
 #####################
