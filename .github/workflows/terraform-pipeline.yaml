@@ -167,7 +167,7 @@ name: Terraform Plan and Apply
 on:
   push:
     branches:
-      - test
+      - main
   pull_request:
   workflow_dispatch:
     inputs:
@@ -190,7 +190,7 @@ jobs:
   terraform:
     name: Terraform CICD
     runs-on: ubuntu-latest
-    environment: sandbox
+    environment: prod
 
     steps:
     - name: Checkout code
@@ -211,10 +211,10 @@ jobs:
       run: terraform validate
 
     - name: Terraform Plan
-      run: terraform plan -var-file=Environments/sandbox/terraform.tfvars -out=plan-sandbox.tfplan
+      run: terraform plan -var-file=Environments/prod/terraform.tfvars -out=plan-prod.tfplan
 
     - name: Manual Approval
-      if: github.ref != 'refs/heads/main'
+      if: github.ref == 'refs/heads/main'
       id: approval
       uses: trstringer/manual-approval@v1
       with:
@@ -234,5 +234,65 @@ jobs:
 
     - name: Terraform Apply
       if: steps.approval.outputs.approved == 'true'
-      run: terraform apply --auto-approve plan-sandbox.tfplan
+      run: terraform apply --auto-approve plan-prod.tfplan
 
+#####################
+# name: Implement Build Steps in GitHub Actions Workflow for Terraform Plan and Apply
+# on:
+#   push:
+#     branches:
+#       - main
+#       - feature/*
+#   pull_request:
+#     types:
+#       - opened
+#       - synchronize
+
+# env:
+#   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#   TF_VAR_region: ${{ secrets.TF_VAR_REGION }}
+
+# jobs:
+#   Build-Infra:
+#     name: Terraform CICD
+#     runs-on: Ubuntu-latest
+#     permissions:
+#       contents: read
+#       issues: write
+#     steps:
+#     - name: Checkout
+#       uses: actions/checkout@v2
+#     # This Step is only executed if the name of the Branch is either Main or starts with feature
+#     - name: Terraform Plan
+#       id: plan
+#       if: github.ref_name == 'main' || startsWith(github.ref_name, 'feature/')
+#       run: terraform plan
+#       # if: github.ref_name == 'TDP-18' || startsWith(github.ref_name, 'feature/')
+#       # run: terraform plan -out saved_plan
+
+#      # This Step Requires Approval from owner or maintainer whom has the required Github token to proceed further 
+#      # This Step Requires Approval from owner or maintainer whom has the required Github token to proceed further
+#     - name: Manual Approval
+#       if: github.event_name == 'workflow_dispatch' && github.ref_name == 'main'
+#       if: github.event_name == 'push' || startsWith(github.ref_name, 'feature/')
+#       uses: trstringer/manual-approval@v1
+#       with:
+#         approvers: owner,maintainer
+#         secret: ${{ secrets.GITHUB_TOKEN }}
+#         minimum-approvals: 1
+
+   
+#         approvers: Mitchxxx,
+#         secret: ${{ secrets.GITHUB_TOKEN }}
+#         minimum-approvals: 1
+#         issue-title: "Manual approval required for workflow run"
+#         issue-body: |
+#           Workflow is pending manual review.
+#            URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+#            Required approvers: [Mitchxxx]
+#            Respond "approved", "approve", "lgtm", "yes" to continue workflow or "denied", "deny", "no" to cancel.
+#     - name: Terraform Apply
+#       id: apply
+#       if: github.ref_name == 'TDP-18' && (github.event_name == 'push' || steps.approval.outputs.approved == 'true')
+#       run: terraform apply --auto-approve saved_plan
