@@ -239,7 +239,7 @@ jobs:
       run: terraform validate
 
     - name: Terraform Plan
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.base_ref == 'main'
+      if: github.event_name == 'pull_request' && github.base_ref == 'main'
       run: terraform plan -var-file=Environments/staging/terraform.tfvars -out=plan-staging.tfplan
 
   terraform-sandbox:
@@ -303,6 +303,7 @@ jobs:
         run: terraform plan -var-file=Environments/prod/terraform.tfvars -out=plan-prod.tfplan
 
       - name: Manual Approval
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: approval
         uses: trstringer/manual-approval@v1
         with:
