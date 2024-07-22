@@ -189,7 +189,7 @@ env:
 
 jobs:
   terraform-prod:
-    name: Terraform CICD
+    name: Terraform prod
     runs-on: ubuntu-latest
     environment: prod
 
@@ -216,7 +216,7 @@ jobs:
       run: terraform plan -var-file=Environments/prod/terraform.tfvars -out=plan-prod.tfplan
 
   terraform-staging:
-    name: Terraform CICD
+    name: Terraform staging
     runs-on: ubuntu-latest
     environment: staging
 
@@ -243,7 +243,7 @@ jobs:
       run: terraform plan -var-file=Environments/staging/terraform.tfvars -out=plan-staging.tfplan
 
   terraform-sandbox:
-    name: Terraform CICD
+    name: Terraform sandbox
     runs-on: ubuntu-latest
     environment: sandbox
 
@@ -266,22 +266,21 @@ jobs:
       run: terraform validate
 
     - name: Terraform Plan
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.base_ref == 'main'
+      # if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.base_ref == 'main'
+      if: github.event_name == 'pull_request' && github.base_ref == 'main'
       run: terraform plan -var-file=Environments/sandbox/terraform.tfvars -out=plan-sandbox.tfplan
     
     - name: Terraform Apply
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.base_ref == 'main'
+      # if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.base_ref == 'main'
+      if: github.event_name == 'pull_request' && github.base_ref == 'main'
       run: terraform apply --auto-approve plan-sandbox.tfplan
 
   deploy-to-prod:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     environment: prod
-    permissions:
-      contents: read
-      issues: write
-    needs: terraform-prod
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.base_ref == 'main'
-      
+    needs: terraform-sandbox
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
