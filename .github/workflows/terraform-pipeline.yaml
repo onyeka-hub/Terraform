@@ -498,3 +498,369 @@ jobs:
 #       - name: Terraform Apply
 #         if: ${{ steps.approval.outputs.approved }} == 'true'
 #         run: terraform apply --auto-approve plan-prod.tfplan
+
+```yaml
+name: Github Actions CI/CD pipeline for Terraform
+run-name: ${{ github.actor }} Running Github Actions CI/CD pipeline for Terraform
+
+# The workflow is configured to trigger on push and pull request events.
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+  pull_request:
+    branches:
+      - main
+      - feature/*
+
+# AWS credentials and other sensitive information are securely stored using Github Secrets
+env:
+    AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    TF_VAR_region: ${{ secrets.TF_VAR_REGION }}
+
+jobs:
+  terraform:
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      issues: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+       
+      - name: Initialize Terraform
+        run: terraform init
+
+      - name: Validate Terraform
+        run: terraform validate
+
+    # For other environments, the workflow only plans changes on feature 
+    # branches but doesn't apply them.
+      - name: Plan Terraform changes on prod
+        id: plan-prod
+        if: github.ref != 'refs/heads/main'
+        run: terraform plan -var-file=Environments/prod/terraform.tfvars -out=plan-prod.tfplan
+
+      - name: Plan Terraform changes on staging
+        id: plan-staging
+        if: github.ref != 'refs/heads/main'
+        run: terraform plan -var-file=Environments/staging/terraform.tfvars -out=plan-staging.tfplan
+       
+    # The workflow plans and applies Terraform changes to the "sandbox" 
+    # environment when working on feature branches.
+      - name: Plan Terraform changes (Sandbox only)
+        id: plan-sandbox
+        if: github.ref != 'refs/heads/main'
+        run: terraform plan -var-file=Environments/sandbox/terraform.tfvars -out=plan-sandbox.tfplan
+
+      - name: Apply Terraform changes (Sandbox only)
+        if: github.ref != 'refs/heads/main'
+        run: terraform apply -auto-approve plan-sandbox.tfplan
+        
+# The workflow ensures that terraform apply can only be executed on the main branch for
+# production environments. And A manual approval step is implemented in the workflow before 
+# applying changes to production.
+  deploy-to-prod:
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      issues: write
+    needs: terraform
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.base_ref == 'main'
+  
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+       
+      - name: Initialize Terraform
+        run: terraform init
+
+      - name: Validate Terraform
+        run: terraform validate
+    
+      - name: Plan Terraform changes
+        run: terraform plan -var-file=Environments/prod/terraform.tfvars -out=plan-prod.tfplan
+
+      - name: Manual Approval
+        id: approval
+        uses: trstringer/manual-approval@v1
+        with:
+          approvers: darey-io, uzukwujp
+          secret: ${{ secrets.GITHUB_TOKEN }}
+          minimum-approvals: 1
+          issue-title: "Manual approval required for afxtern Terraform pipeline"
+          issue-body: |
+            Workflow is pending manual review.
+            URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Required approvers: [darey-io, uzukwujp]
+            Respond "approved", "approve", "lgtm", "yes" to continue workflow or "denied", "deny", "no" to cancel.
+
+      - name: Terraform Apply
+        if: ${{ steps.approval.outputs.approved }} == 'true'
+        run: terraform apply --auto-approve plan-prod.tfplan
+
+# jobs:
+#   terraform:
+#     name: Terraform CICD
+#     runs-on: self-hosted
+#     permissions:
+#       contents: read
+#       issues: write
+
+#     steps:
+#     - name: Checkout code
+#       uses: actions/checkout@v4
+
+#     - name: Set up Node.js
+#       uses: actions/setup-node@v4
+#       with:
+#         node-version: '18'
+
+#     - name: Set up Terraform
+#       uses: hashicorp/setup-terraform@v3
+       
+#     - name: Initialize Terraform
+#       run: terraform init
+
+#     - name: Validate Terraform
+#       run: terraform validate
+
+#     - name: Terraform Plan
+#       run: terraform plan -var-file=Environments/sandbox/terraform.tfvars -out=plan-sandbox.tfplan
+
+#     - name: Manual Approval
+#       if: startsWith(github.ref, 'refs/heads/feature/')
+#       id: approval
+#       uses: trstringer/manual-approval@v1
+#       with:
+#         approvers: onyeka-hub
+#         secret: ${{ secrets.GITHUB_TOKEN }}
+#         minimum-approvals: 1
+#         issue-title: "Manual approval required for workflow run"
+#         issue-body: |
+#           Workflow is pending manual review.
+#           URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+#           Required approvers: [onyeka-hub]
+#           Respond "approved", "approve", "lgtm", "yes" to continue workflow or "denied", "deny", "no" to cancel.
+
+#     - name: Terraform Apply
+#       if: startsWith(github.ref, 'refs/heads/feature/') && steps.approval.outputs.approved == 'true'
+#       run: terraform apply --auto-approve plan-sandbox.tfplan
+
+
+# if: startsWith(github.ref, 'refs/heads/feature/') && ${{ steps.approval.outputs.approved }} == 'true'
+# if: startsWith(github.ref, 'refs/heads/feature/')
+# if: github.ref == 'refs/heads/main'
+# if: github.event_name == 'pull_request'
+# if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+# if: github.ref == 'refs/heads/main' && ${{ steps.approval.outputs.approved }} == 'true'
+# if: startsWith(github.ref, 'refs/heads/feature/') && ${{ steps.approval.outputs.approved }} == 'true'
+# if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.base_ref == 'main' && ${{ steps.approval.outputs.approved }} == 'true'
+# if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.base_ref == 'main'
+# if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.base_ref == 'main'
+
+
+# name: Github Actions CI/CD pipeline for Terraform
+# run-name: ${{ github.actor }} Running Github Actions CI/CD pipeline for Terraform
+
+# # The workflow is configured to trigger on push and pull request events.
+# on:
+#   push:
+#     branches:
+#       - main
+#       - feature/*
+#   pull_request:
+#     branches:
+#       - main
+
+# env:
+#     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#     TF_VAR_region: ${{ secrets.TF_VAR_REGION }}
+
+# jobs:
+#   terraform:
+#     runs-on: self-hosted
+#     permissions:
+#       contents: read
+#       issues: write
+
+#     steps:
+#     - name: Checkout code
+#       uses: actions/checkout@v4
+
+#     - name: Set up Node.js
+#       uses: actions/setup-node@v4
+#       with:
+#         node-version: '18'
+
+#     - name: Set up Terraform
+#       uses: hashicorp/setup-terraform@v3
+       
+#     - name: Initialize Terraform
+#       run: terraform init
+
+#     - name: Validate Terraform
+#       run: terraform validate
+
+#     - name: Terraform Plan
+#       run: terraform plan -var-file=Environments/sandbox/terraform.tfvars -out=plan-sandbox.tfplan
+
+#     - name: Manual Approval
+#       id: approval
+#       uses: trstringer/manual-approval@v1
+#       with:
+#         approvers: onyeka-hub
+#         secret: ${{ secrets.GITHUB_TOKEN }}
+#         minimum-approvals: 1
+#         issue-title: "Manual approval required for workflow run"
+#         issue-body: |
+#           Workflow is pending manual review.
+#           URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+#           Required approvers: [onyeka-hub]
+#           Respond "approved", "approve", "lgtm", "yes" to continue workflow or "denied", "deny", "no" to cancel.
+
+#     - name: Terraform Apply
+#       if: ${{ steps.approval.outputs.approved }} == 'true'
+#       run: terraform apply --auto-approve plan-sandbox.tfplan
+```
+
+```
+name: Github Actions CI/CD pipeline for Terraform
+run-name: ${{ github.actor }} Running Github Actions CI/CD pipeline for Terraform
+
+# The workflow is configured to trigger on push and pull request events.
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+  pull_request:
+    branches:
+      - main
+      - feature/*
+
+# AWS credentials and other sensitive information are securely stored using Github Secrets
+env:
+    AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    TF_VAR_region: ${{ secrets.TF_VAR_REGION }}
+
+jobs:
+  terraform:
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      issues: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+       
+      - name: Initialize Terraform
+        run: terraform init
+
+      - name: Validate Terraform
+        run: terraform validate
+
+    # For other environments, the workflow only plans changes on feature 
+    # branches but doesn't apply them.
+      - name: Plan Terraform changes on prod
+        id: plan-prod
+        if: github.ref != 'refs/heads/main'
+        run: terraform plan -var-file=Environments/prod/terraform.tfvars -out=plan-prod.tfplan
+
+      - name: Plan Terraform changes on staging
+        id: plan-staging
+        if: github.ref != 'refs/heads/main'
+        run: terraform plan -var-file=Environments/staging/terraform.tfvars -out=plan-staging.tfplan
+       
+    # The workflow plans and applies Terraform changes to the "sandbox" 
+    # environment when working on feature branches.
+      - name: Plan Terraform changes (Sandbox only)
+        id: plan-sandbox
+        if: github.ref != 'refs/heads/main'
+        run: terraform plan -var-file=Environments/sandbox/terraform.tfvars -out=plan-sandbox.tfplan
+
+      - name: Apply Terraform changes (Sandbox only)
+        if: github.ref != 'refs/heads/main'
+        run: terraform apply -auto-approve plan-sandbox.tfplan
+        
+# The workflow ensures that terraform apply can only be executed on the main branch for
+# production environments. And A manual approval step is implemented in the workflow before 
+# applying changes to production.
+  deploy-to-prod:
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      issues: write
+    needs: terraform
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+       
+      - name: Initialize Terraform
+        run: terraform init
+
+      - name: Validate Terraform
+        run: terraform validate
+    
+      - name: Plan Terraform changes
+        run: terraform plan -var-file=Environments/prod/terraform.tfvars -out=plan-prod.tfplan
+
+      - name: Manual Approval
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: approval
+        uses: trstringer/manual-approval@v1
+        with:
+          approvers: darey-io, uzukwujp
+          secret: ${{ secrets.GITHUB_TOKEN }}
+          minimum-approvals: 1
+          issue-title: "Manual approval required for afxtern Terraform pipeline"
+          issue-body: |
+            Workflow is pending manual review.
+            URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Required approvers: [darey-io, uzukwujp]
+            Respond "approved", "approve", "lgtm", "yes" to continue workflow or "denied", "deny", "no" to cancel.
+
+      - name: Terraform Apply
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && ${{ steps.approval.outputs.approved }} == 'true'
+        run: terraform apply --auto-approve plan-prod.tfplan
+```
