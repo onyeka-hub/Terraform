@@ -308,7 +308,7 @@ jobs:
         uses: trstringer/manual-approval@v1
         with:
           approvers: onyeka-hub
-          secret: ${{ secrets.GITHUB_TOKEN }}
+          secret: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           minimum-approvals: 1
           issue-title: "Manual approval required for afxtern Terraform pipeline"
           issue-body: |
@@ -318,7 +318,7 @@ jobs:
             Respond "approved", "approve", "lgtm", "yes" to continue workflow or "denied", "deny", "no" to cancel.
 
       - name: Terraform Apply
-        if: ${{ steps.approval.outputs.approved }} == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && ${{ steps.approval.outputs.approved }} == 'true'
         run: terraform apply --auto-approve plan-prod.tfplan
 
     #   - name: Manual Approval
