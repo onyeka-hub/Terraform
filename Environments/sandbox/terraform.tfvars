@@ -1,3 +1,9 @@
-# sandbox variables
-# region = "us-east-1"
-bucket = "afxtern-pod-a-sandbox"
+name = "af-xtern-pod-a"
+enable_dns_support                  = "true"
+enable_dns_hostnames                = "true"
+preferred_number_of_public_subnets  = 2
+preferred_number_of_private_subnets = 2
+environment                         = "sandbox"
+access_ip                           = "0.0.0.0/0"
+vpc_cidr                            = "10.4.0.0/16"
+region                              = "us-east-1"
