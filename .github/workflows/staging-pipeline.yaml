@@ -1,0 +1,131 @@
+name: Github Actions CI/CD pipeline for Terraform
+run-name: ${{ github.actor }} Running CI/CD pipeline for Terraform on staging
+
+# The workflow is configured to trigger on push and pull request events.
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+
+    paths: 
+          - 'Environments/staging/**'
+  pull_request:
+    branches:
+      - main
+      - feature/*
+    paths: 
+      - 'Environments/staging/**'
+
+# AWS credentials and other sensitive information are securely stored using Github Secrets
+env:
+    AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    TF_VAR_region: ${{ secrets.TF_VAR_REGION }}
+
+jobs:
+  terraform:
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      issues: write
+
+    defaults:
+      run:
+        shell: bash
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup tfsec
+        uses: aquasecurity/tfsec-sarif-action@v0.1.4
+        with:
+          sarif_file: tfsec.sarif
+
+      - name: Scan Terraform with TFSec
+        run: |
+          tfsec . -s --format json > tfsec-output.json
+
+      - name: Show Full TFSec Output
+        run: |
+          echo "Full TFSec Output:"
+          cat tfsec-output.json
+          
+      - name: Check for Critical or High TFSec Issues
+        id: check_tfsec
+        run: |
+          CRITICAL_COUNT=$(jq '[.results[] | select(.severity == "CRITICAL")] | length' tfsec-output.json)
+          HIGH_COUNT=$(jq '[.results[] | select(.severity == "HIGH")] | length' tfsec-output.json)
+
+          echo "Critical issues found: $CRITICAL_COUNT"
+          echo "High issues found: $HIGH_COUNT"
+
+          if [ "$CRITICAL_COUNT" -gt 0 ] || [ "$HIGH_COUNT" -gt 0 ]; then
+            echo "TFSec found critical or high issues. Failing the pipeline."
+            exit 1
+          else
+            echo "No critical or high issues found."
+          fi
+
+      - name: Check for Medium/Low TFSec Issues and Log Them
+        run: |
+          MEDIUM_COUNT=$(jq '[.results[] | select(.severity == "MEDIUM")] | length' tfsec-output.json)
+          LOW_COUNT=$(jq '[.results[] | select(.severity == "LOW")] | length' tfsec-output.json)
+      
+          if [ "$MEDIUM_COUNT" -gt 0 ] || [ "$LOW_COUNT" -gt 0 ]; then
+            echo "Medium issues found: $MEDIUM_COUNT"
+            echo "Low issues found: $LOW_COUNT"
+            jq '.results[] | select(.severity == "MEDIUM" or .severity == "LOW")' tfsec-output.json
+          else
+            echo "No medium or low issues found."
+          fi
+          
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.3"
+       
+      - name: Initialize Terraform
+        working-directory: ./Environments/staging
+        env:
+          TF_VAR_BUCKET: ${{ secrets.TF_VAR_BUCKET_STAGING }}
+          TF_VAR_KEY: ${{ secrets.TF_VAR_KEY }}
+          TF_VAR_REGION: ${{ secrets.TF_VAR_REGION }}
+          TF_VAR_DYNAMODB_TABLE: ${{ secrets.TF_VAR_DYNAMODB_TABLE_STAGING }}
+          TF_VAR_ENCRYPT: ${{ secrets.TF_VAR_ENCRYPT }}
+        run: terraform init -backend-config="bucket=${TF_VAR_BUCKET}" -backend-config="key=${TF_VAR_KEY}" -backend-config="region=${TF_VAR_REGION}" -backend-config="dynamodb_table=${TF_VAR_DYNAMODB_TABLE}" -backend-config="encrypt=${TF_VAR_ENCRYPT}"
+
+      - name: Validate Terraform
+        working-directory: ./Environments/staging
+        run: terraform validate
+
+    # For staging environment, the workflow only plans changes on feature branches but doesn't apply them.
+      - name: Plan Terraform changes on staging
+        id: plan-staging
+        working-directory: ./Environments/staging
+        if: github.ref != 'refs/heads/main'
+        run: terraform plan -var-file=terraform.tfvars -out=plan-staging.tfplan
+
+      - name: Apply Terraform changes on staging
+        working-directory: ./Environments/staging
+        if: github.ref != 'refs/heads/main' && github.event_name != 'pull_request'
+        run: terraform apply -auto-approve plan-staging.tfplan
+              
+    #  This step checks if the pipeline has failed and triggers a slack notification.  
+      - name: Notify Slack on Failure
+        if: failure()  # Ensures the step runs only if previous steps failed
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "❌ Terraform Pipeline failed in repository ${{ github.repository }} on branch ${{ github.ref_name }} (commit: ${{ github.sha }}). View details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}   
+        

@@ -1,2 +1,9 @@
-# production variables
-bucket = "afxtern-pod-a-prod"
+name = "af-xtern-pod-a"
+enable_dns_support                  = "true"
+enable_dns_hostnames                = "true"
+preferred_number_of_public_subnets  = 2
+preferred_number_of_private_subnets = 2
+environment                         = "prod"
+access_ip                           = "0.0.0.0/0"
+vpc_cidr                            = "10.2.0.0/16"
+region                              = "us-east-1"
