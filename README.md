@@ -373,9 +373,14 @@ This section describes the outputs provided by this Terraform module. These outp
 Enough output have been created in vpc/outputs for your reference
 
 ###  References
+- terraform setup - https://github.com/marketplace/actions/hashicorp-setup-terraform
 - Consult the [Terraform documentation](https://developer.hashicorp.com/terraform/docs) for additional help and resources.
 - For [manual approval](https://github.com/trstringer/manual-approval)
 - [Workflow syntax for GitHub Actions](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idenvironment)
 - [GitHub Actions documentation](https://docs.github.com/en/actions)
 - https://developer.hashicorp.com/terraform/cli/commands/init
 - https://www.youtube.com/watch?v=YcfWKy8YiLo
+- slack notification https://www.youtube.com/watch?v=hzIub2noFw8
+- slack notification https://github.com/marketplace/actions/slack-send
+- slack notification https://api.slack.com/apps
+- slack notification https://api.slack.com/apps/A07GG5DKYPM/incoming-webhooks?success=1
